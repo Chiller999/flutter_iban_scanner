@@ -298,10 +298,12 @@ class _IBANScannerViewState extends State<IBANScannerView> {
 );
 
 
-    final inputImageFormat =
-        InputImageFormatMethods.fromRawValue(image.format.raw) ??
-            InputImageFormat.yuv_420_888;
+    final inputImageFormat = InputImageFormat.values.firstWhere(
+  (element) => element.rawValue == image.format.raw,
+  orElse: () => InputImageFormat.yuv_420_888,
+);
 
+/*
     final planeData = image.planes.map(
       (Plane plane) {
         return InputImagePlaneMetadata(
@@ -311,13 +313,22 @@ class _IBANScannerViewState extends State<IBANScannerView> {
         );
       },
     ).toList();
-
+*/
+    /*
     final inputImageData = InputImageData(
       size: imageSize,
       imageRotation: imageRotation,
       inputImageFormat: inputImageFormat,
       planeData: planeData,
     );
+*/
+final inputImageData = InputImageMetadata(
+  size: imageSize,
+  rotation: imageRotation,
+  format: inputImageFormat,
+  bytesPerRow: image.planes[0].bytesPerRow,
+);
+    
 
     final inputImage =
         InputImage.fromBytes(bytes: bytes, metadata: inputImageData);
