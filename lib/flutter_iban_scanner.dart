@@ -29,7 +29,7 @@ class IBANScannerView extends StatefulWidget {
 }
 
 class _IBANScannerViewState extends State<IBANScannerView> {
-  TextDetector textDetector = GoogleMlKit.vision.textRecognizer();
+  final textDetector = GoogleMlKit.vision.textRecognizer();
   ScreenMode _mode = ScreenMode.liveFeed;
   CameraLensDirection initialDirection = CameraLensDirection.back;
   CameraController? _controller;
@@ -292,13 +292,15 @@ class _IBANScannerViewState extends State<IBANScannerView> {
         Size(image.width.toDouble(), image.height.toDouble());
 
     final camera = cameras[_cameraIndex];
-    final imageRotation =
-        InputImageRotationMethods.fromRawValue(camera.sensorOrientation) ??
-            InputImageRotation.Rotation_0deg;
+    final imageRotation = InputImageRotation.values.firstWhere(
+  (element) => element.rawValue == camera.sensorOrientation,
+  orElse: () => InputImageRotation.rotation0deg,
+);
+
 
     final inputImageFormat =
         InputImageFormatMethods.fromRawValue(image.format.raw) ??
-            InputImageFormat.NV21;
+            InputImageFormat.yuv_420_888;
 
     final planeData = image.planes.map(
       (Plane plane) {
@@ -318,7 +320,7 @@ class _IBANScannerViewState extends State<IBANScannerView> {
     );
 
     final inputImage =
-        InputImage.fromBytes(bytes: bytes, inputImageData: inputImageData);
+        InputImage.fromBytes(bytes: bytes, metadata: inputImageData);
     if (mounted) {
       processImage(inputImage);
     }
