@@ -1,4 +1,4 @@
-# Flutter IBAN Scanner
+# Flutter IBAN Scanner 2025
 
 [![pub package](https://img.shields.io/pub/v/flutter_iban_scanner.svg)](https://pub.dev/packages/flutter_iban_scanner)
 [![CodeFactor](https://www.codefactor.io/repository/github/sebastianbuechler/flutter_iban_scanner/badge)](https://www.codefactor.io/repository/github/sebastianbuechler/flutter_iban_scanner)
