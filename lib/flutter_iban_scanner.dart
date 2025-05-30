@@ -29,7 +29,7 @@ class IBANScannerView extends StatefulWidget {
 }
 
 class _IBANScannerViewState extends State<IBANScannerView> {
-  TextDetector textDetector = GoogleMlKit.vision.textDetector();
+  TextDetector textDetector = GoogleMlKit.vision.textRecognizer();
   ScreenMode _mode = ScreenMode.liveFeed;
   CameraLensDirection initialDirection = CameraLensDirection.back;
   CameraController? _controller;
