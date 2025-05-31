@@ -38,7 +38,7 @@ class _IBANScannerViewState extends State<IBANScannerView> {
   File? _image;
   late ImagePicker _imagePicker;
   int _cameraIndex = 0;
-  late List<CameraDescription> cameras;
+  List<CameraDescription> cameras;
   bool isBusy = false;
   bool ibanFound = false;
   String iban = "";
@@ -254,19 +254,17 @@ void dispose() {
   }
 
   Future _startLiveFeed() async {
-    final camera = cameras[_cameraIndex];
+    final camera = cameras![_cameraIndex];
     _controller = CameraController(
       camera,
       ResolutionPreset.max,
       enableAudio: false,
     );
-    _controller?.initialize().then((_) {
-      if (!mounted) {
-        return;
-      }
-      _controller?.startImageStream(_processCameraImage);
-      setState(() {});
-    });
+	await _controller?.initialize();
+    if (!mounted) return;
+    await _controller?.startImageStream(_processCameraImage);
+    setState(() {});
+
   }
 
   Future _stopLiveFeed() async {
