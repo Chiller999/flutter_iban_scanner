@@ -301,10 +301,7 @@ void dispose() {
     orElse: () => InputImageRotation.rotation0deg,
   );
 
-  final inputImageFormat = InputImageFormat.values.firstWhere(
-    (element) => element.rawValue == image.format.raw,
-    orElse: () => InputImageFormat.yuv_420_888,
-  );
+final inputImageFormat = InputImageFormat.yuv_420_888;
 
   final inputImageData = InputImageMetadata(
     size: imageSize,
