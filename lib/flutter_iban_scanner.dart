@@ -285,41 +285,51 @@ void dispose() {
     await _startLiveFeed();
   }
 
- Future _processCameraImage(CameraImage image) async {
-  final WriteBuffer allBytes = WriteBuffer();
-  for (Plane plane in image.planes) {
-    allBytes.putUint8List(plane.bytes);
-  }
-  final bytes = allBytes.done().buffer.asUint8List();
+Future _processCameraImage(CameraImage image) async {
+  if (isBusy) return;
+  isBusy = true;
 
-  final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
+  try {
+    if (image.format.group != ImageFormatGroup.yuv420) {
+      debugPrint('Unsupported image format: ${image.format.group}');
+      isBusy = false;
+      return;
+    }
 
-  final camera = cameras[_cameraIndex];
+    final WriteBuffer allBytes = WriteBuffer();
+    for (Plane plane in image.planes) {
+      allBytes.putUint8List(plane.bytes);
+    }
+    final bytes = allBytes.done().buffer.asUint8List();
 
-  final imageRotation = InputImageRotation.values.firstWhere(
-    (element) => element.rawValue == camera.sensorOrientation,
-    orElse: () => InputImageRotation.rotation0deg,
-  );
+    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
+    final camera = cameras[_cameraIndex];
 
-final inputImageFormat = InputImageFormat.yuv_420_888;
+    final imageRotation = InputImageRotation.values.firstWhere(
+      (element) => element.rawValue == camera.sensorOrientation,
+      orElse: () => InputImageRotation.rotation0deg,
+    );
 
-  final inputImageData = InputImageMetadata(
-    size: imageSize,
-    rotation: imageRotation,
-    format: inputImageFormat,
-    bytesPerRow: image.planes[0].bytesPerRow,
-  );
+    final inputImageData = InputImageMetadata(
+      size: imageSize,
+      rotation: imageRotation,
+      format: InputImageFormat.yuv_420_888,
+      bytesPerRow: image.planes[0].bytesPerRow,
+    );
 
-  final inputImage = InputImage.fromBytes(
-    bytes: bytes,
-    metadata: inputImageData,
-  );
+    final inputImage = InputImage.fromBytes(
+      bytes: bytes,
+      metadata: inputImageData,
+    );
 
-  if (mounted) {
     await processImage(inputImage);
+  } catch (e) {
+    debugPrint('Error in processing camera image: $e');
+  } finally {
+    isBusy = false;
   }
 }
-  
+
   
   
   
