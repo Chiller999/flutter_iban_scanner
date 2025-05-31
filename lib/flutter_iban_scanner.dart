@@ -103,53 +103,105 @@ class _IBANScannerViewState extends State<IBANScannerView> {
   }
 
   Widget _liveFeedBody() {
-    if (_controller?.value.isInitialized == false) {
-      return Container();
+    if (_controller?.value.isInitialized != true) {
+      return const Center(child: CircularProgressIndicator());
     }
+    
+    final size = MediaQuery.of(context).size;
+    final deviceRatio = size.width / size.height;
+    
     return SafeArea(
-      child: Container(
-        color: Colors.black,
-        child: Stack(
-          fit: StackFit.expand,
-          children: <Widget>[
-            if (_controller != null) CameraPreview(_controller!),
-            const Mask(),
-            Positioned(
-              top: 0.0,
-              child: SizedBox(
-                width: MediaQuery.of(context).size.width,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  mainAxisSize: MainAxisSize.max,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(left: 20.0, top: 20),
-                      child: GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: const Icon(Icons.arrow_back, color: Colors.white),
+      child: Stack(
+        children: <Widget>[
+          // Camera preview with proper aspect ratio
+          Center(
+            child: Transform.scale(
+              scale: _controller!.value.aspectRatio / deviceRatio,
+              child: AspectRatio(
+                aspectRatio: _controller!.value.aspectRatio,
+                child: CameraPreview(_controller!),
+              ),
+            ),
+          ),
+          // Scanning area overlay
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.5),
+            ),
+            child: CustomPaint(
+              painter: ScanningAreaPainter(),
+              child: Container(),
+            ),
+          ),
+          // Top controls
+          Positioned(
+            top: 20.0,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 20.0),
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(20),
                       ),
+                      child: const Icon(Icons.arrow_back, color: Colors.white),
                     ),
-                    if (widget.allowImagePicker)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 20.0, top: 20),
-                        child: GestureDetector(
-                          onTap: _switchScreenMode,
-                          child: Icon(
-                            _mode == ScreenMode.liveFeed
-                                ? Icons.photo_library_outlined
-                                : (Platform.isIOS
-                                    ? Icons.camera_alt_outlined
-                                    : Icons.camera),
-                            color: Colors.white,
-                          ),
+                  ),
+                ),
+                if (widget.allowImagePicker)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 20.0),
+                    child: GestureDetector(
+                      onTap: _switchScreenMode,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          _mode == ScreenMode.liveFeed
+                              ? Icons.photo_library_outlined
+                              : (Platform.isIOS
+                                  ? Icons.camera_alt_outlined
+                                  : Icons.camera),
+                          color: Colors.white,
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // Instructions
+          Positioned(
+            bottom: 100,
+            left: 20,
+            right: 20,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(8),
               ),
-            )
-          ],
-        ),
+              child: const Text(
+                'Position the IBAN within the scanning area',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -277,7 +329,7 @@ class _IBANScannerViewState extends State<IBANScannerView> {
     final camera = cameras[_cameraIndex];
     _controller = CameraController(
       camera,
-      ResolutionPreset.max,
+      ResolutionPreset.medium, // Use medium for better performance and fewer buffer issues
       imageFormatGroup: ImageFormatGroup.yuv420,
       enableAudio: false,
     );
@@ -322,43 +374,55 @@ class _IBANScannerViewState extends State<IBANScannerView> {
 
   Future _processCameraImage(CameraImage image) async {
     if (isBusy) return;
+    isBusy = true;
     
     try {
-      final WriteBuffer allBytes = WriteBuffer();
-      for (Plane plane in image.planes) {
-        allBytes.putUint8List(plane.bytes);
+      final inputImage = _inputImageFromCameraImage(image);
+      if (inputImage == null) {
+        isBusy = false;
+        return;
       }
-      final bytes = allBytes.done().buffer.asUint8List();
-
-      final Size imageSize =
-          Size(image.width.toDouble(), image.height.toDouble());
-
-      final camera = cameras[_cameraIndex];
-      final imageRotation = InputImageRotation.values.firstWhere(
-        (element) => element.rawValue == camera.sensorOrientation,
-        orElse: () => InputImageRotation.rotation0deg,
-      );
-
-      final inputImageFormat = InputImageFormat.values.firstWhere(
-        (element) => element.rawValue == image.format.raw,
-        orElse: () => InputImageFormat.yuv420,
-      );
-
-      final inputImageData = InputImageMetadata(
-        size: imageSize,
-        rotation: imageRotation,
-        format: inputImageFormat,
-        bytesPerRow: image.planes[0].bytesPerRow,
-      );
-
-      final inputImage =
-          InputImage.fromBytes(bytes: bytes, metadata: inputImageData);
       
       if (mounted) {
         await processImage(inputImage);
       }
     } catch (e) {
       print('Error processing camera image: $e');
+    } finally {
+      isBusy = false;
+    }
+  }
+
+  InputImage? _inputImageFromCameraImage(CameraImage image) {
+    try {
+      final camera = cameras[_cameraIndex];
+      final rotation = InputImageRotation.values.firstWhere(
+        (element) => element.rawValue == camera.sensorOrientation,
+        orElse: () => InputImageRotation.rotation0deg,
+      );
+
+      final format = InputImageFormat.values.firstWhere(
+        (element) => element.rawValue == image.format.raw,
+        orElse: () => InputImageFormat.nv21, // Default to NV21 for Android
+      );
+
+      if (image.planes.isEmpty) return null;
+
+      // For YUV420 format, we need to handle the conversion properly
+      final plane = image.planes.first;
+      
+      return InputImage.fromBytes(
+        bytes: plane.bytes,
+        metadata: InputImageMetadata(
+          size: Size(image.width.toDouble(), image.height.toDouble()),
+          rotation: rotation,
+          format: format,
+          bytesPerRow: plane.bytesPerRow,
+        ),
+      );
+    } catch (e) {
+      print('Error creating InputImage: $e');
+      return null;
     }
   }
 }
@@ -368,25 +432,20 @@ class Mask extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.5),
-        ),
-        child: CustomPaint(
-          painter: MaskPainter(),
-          child: Container(),
-        ),
+    return Container(
+      child: CustomPaint(
+        painter: ScanningAreaPainter(),
+        child: Container(),
       ),
     );
   }
 }
 
-class MaskPainter extends CustomPainter {
+class ScanningAreaPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.black.withOpacity(0.7)
+      ..color = Colors.black.withOpacity(0.5)
       ..style = PaintingStyle.fill;
 
     final transparentPaint = Paint()
@@ -397,11 +456,12 @@ class MaskPainter extends CustomPainter {
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
 
     // Create a transparent rectangle in the center for scanning area
-    final scanAreaHeight = size.height * 0.3;
-    final scanAreaWidth = size.width * 0.8;
+    final scanAreaHeight = size.height * 0.25;
+    final scanAreaWidth = size.width * 0.85;
     final left = (size.width - scanAreaWidth) / 2;
     final top = (size.height - scanAreaHeight) / 2;
 
+    // Clear the scanning area
     canvas.drawRect(
       Rect.fromLTWH(left, top, scanAreaWidth, scanAreaHeight),
       transparentPaint,
@@ -411,12 +471,36 @@ class MaskPainter extends CustomPainter {
     final borderPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
+      ..strokeWidth = 3.0;
 
     canvas.drawRect(
       Rect.fromLTWH(left, top, scanAreaWidth, scanAreaHeight),
       borderPaint,
     );
+
+    // Draw corner indicators
+    final cornerPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.0;
+
+    final cornerLength = 20.0;
+    
+    // Top-left corner
+    canvas.drawLine(Offset(left, top), Offset(left + cornerLength, top), cornerPaint);
+    canvas.drawLine(Offset(left, top), Offset(left, top + cornerLength), cornerPaint);
+    
+    // Top-right corner
+    canvas.drawLine(Offset(left + scanAreaWidth, top), Offset(left + scanAreaWidth - cornerLength, top), cornerPaint);
+    canvas.drawLine(Offset(left + scanAreaWidth, top), Offset(left + scanAreaWidth, top + cornerLength), cornerPaint);
+    
+    // Bottom-left corner
+    canvas.drawLine(Offset(left, top + scanAreaHeight), Offset(left + cornerLength, top + scanAreaHeight), cornerPaint);
+    canvas.drawLine(Offset(left, top + scanAreaHeight), Offset(left, top + scanAreaHeight - cornerLength), cornerPaint);
+    
+    // Bottom-right corner
+    canvas.drawLine(Offset(left + scanAreaWidth, top + scanAreaHeight), Offset(left + scanAreaWidth - cornerLength, top + scanAreaHeight), cornerPaint);
+    canvas.drawLine(Offset(left + scanAreaWidth, top + scanAreaHeight), Offset(left + scanAreaWidth, top + scanAreaHeight - cornerLength), cornerPaint);
   }
 
   @override
