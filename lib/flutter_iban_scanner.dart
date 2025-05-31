@@ -38,7 +38,7 @@ class _IBANScannerViewState extends State<IBANScannerView> {
   File? _image;
   late ImagePicker _imagePicker;
   int _cameraIndex = 0;
-  List<CameraDescription> cameras;
+  List<CameraDescription> cameras = [];
   bool isBusy = false;
   bool ibanFound = false;
   String iban = "";
@@ -50,14 +50,17 @@ class _IBANScannerViewState extends State<IBANScannerView> {
     _initScanner();
   }
 
-  void _initScanner() async {
-    cameras = widget.cameras ?? await availableCameras();
-    if (initialDirection == CameraLensDirection.front) {
-      _cameraIndex = 1;
-    }
-    await _startLiveFeed();
-    _imagePicker = ImagePicker();
+void _initScanner() async {
+  cameras = widget.cameras ?? await availableCameras();
+  if (cameras.isEmpty) return; // Optional: early return if no cameras
+
+  if (initialDirection == CameraLensDirection.front) {
+    _cameraIndex = 1;
   }
+  await _startLiveFeed();
+  _imagePicker = ImagePicker();
+}
+
 
 @override
 void dispose() {
