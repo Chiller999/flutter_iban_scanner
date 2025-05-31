@@ -231,7 +231,7 @@ void dispose() {
     isBusy = true;
 
     final recognisedText = await textDetector.processImage(inputImage);
-
+	print('Recognized text: ${recognisedText.text}');
     for (final textBlock in recognisedText.blocks) {
       if (!regExp.hasMatch(textBlock.text)) {
         continue;
