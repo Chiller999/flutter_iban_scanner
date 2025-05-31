@@ -1,6 +1,7 @@
 library flutter_iban_scanner;
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
@@ -17,12 +18,13 @@ class IBANScannerView extends StatefulWidget {
   final bool allowImagePicker;
   final bool allowCameraSwitch;
 
-  IBANScannerView({
+  const IBANScannerView({
+    Key? key,
     required this.onScannerResult,
     this.cameras,
     this.allowImagePicker = true,
     this.allowCameraSwitch = true,
-  });
+  }) : super(key: key);
 
   @override
   _IBANScannerViewState createState() => _IBANScannerViewState();
@@ -36,7 +38,7 @@ class _IBANScannerViewState extends State<IBANScannerView> {
   File? _image;
   late ImagePicker _imagePicker;
   int _cameraIndex = 0;
-  late List<CameraDescription> cameras;
+  List<CameraDescription> cameras = [];
   bool isBusy = false;
   bool ibanFound = false;
   String iban = "";
@@ -44,14 +46,13 @@ class _IBANScannerViewState extends State<IBANScannerView> {
   @override
   void initState() {
     super.initState();
-
     _initScanner();
   }
 
   void _initScanner() async {
     cameras = widget.cameras ?? await availableCameras();
     if (initialDirection == CameraLensDirection.front) {
-      _cameraIndex = 1;
+      _cameraIndex = cameras.length > 1 ? 1 : 0;
     }
     await _startLiveFeed();
     _imagePicker = ImagePicker();
@@ -59,9 +60,9 @@ class _IBANScannerViewState extends State<IBANScannerView> {
 
   @override
   void dispose() async {
-    _stopLiveFeed();
-    super.dispose();
+    await _stopLiveFeed();
     await textDetector.close();
+    super.dispose();
   }
 
   @override
@@ -75,7 +76,7 @@ class _IBANScannerViewState extends State<IBANScannerView> {
 
   Widget? _floatingActionButton() {
     if (_mode == ScreenMode.gallery) return null;
-    if (cameras.length == 1) return null;
+    if (cameras.isEmpty || cameras.length == 1) return null;
     if (widget.allowCameraSwitch == false) return null;
     return Container(
         height: 70.0,
@@ -93,10 +94,11 @@ class _IBANScannerViewState extends State<IBANScannerView> {
 
   Widget _body() {
     Widget body;
-    if (_mode == ScreenMode.liveFeed)
+    if (_mode == ScreenMode.liveFeed) {
       body = _liveFeedBody();
-    else
+    } else {
       body = _galleryBody();
+    }
     return body;
   }
 
@@ -111,7 +113,7 @@ class _IBANScannerViewState extends State<IBANScannerView> {
           fit: StackFit.expand,
           children: <Widget>[
             if (_controller != null) CameraPreview(_controller!),
-            Mask(),
+            const Mask(),
             Positioned(
               top: 0.0,
               child: SizedBox(
@@ -121,15 +123,15 @@ class _IBANScannerViewState extends State<IBANScannerView> {
                   mainAxisSize: MainAxisSize.max,
                   children: [
                     Padding(
-                      padding: EdgeInsets.only(left: 20.0, top: 20),
+                      padding: const EdgeInsets.only(left: 20.0, top: 20),
                       child: GestureDetector(
                         onTap: () => Navigator.of(context).pop(),
-                        child: Icon(Icons.arrow_back),
+                        child: const Icon(Icons.arrow_back, color: Colors.white),
                       ),
                     ),
                     if (widget.allowImagePicker)
                       Padding(
-                        padding: EdgeInsets.only(right: 20.0, top: 20),
+                        padding: const EdgeInsets.only(right: 20.0, top: 20),
                         child: GestureDetector(
                           onTap: _switchScreenMode,
                           child: Icon(
@@ -138,6 +140,7 @@ class _IBANScannerViewState extends State<IBANScannerView> {
                                 : (Platform.isIOS
                                     ? Icons.camera_alt_outlined
                                     : Icons.camera),
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -159,7 +162,9 @@ class _IBANScannerViewState extends State<IBANScannerView> {
       _mode = ScreenMode.liveFeed;
       await _startLiveFeed();
     }
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Widget _galleryBody() {
@@ -175,21 +180,21 @@ class _IBANScannerViewState extends State<IBANScannerView> {
                 ],
               ),
             )
-          : Icon(
+          : const Icon(
               Icons.image,
               size: 200,
             ),
       Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         child: ElevatedButton(
-          child: Text('From Gallery'),
+          child: const Text('From Gallery'),
           onPressed: () => _getImage(ImageSource.gallery),
         ),
       ),
       Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         child: ElevatedButton(
-          child: Text('Take a picture'),
+          child: const Text('Take a picture'),
           onPressed: () => _getImage(ImageSource.camera),
         ),
       ),
@@ -203,7 +208,9 @@ class _IBANScannerViewState extends State<IBANScannerView> {
     } else {
       print('No image selected.');
     }
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future _processPickedFile(XFile pickedFile) async {
@@ -224,24 +231,38 @@ class _IBANScannerViewState extends State<IBANScannerView> {
     if (isBusy) return;
     isBusy = true;
 
-    final recognisedText = await textDetector.processImage(inputImage);
+    try {
+      final recognisedText = await textDetector.processImage(inputImage);
 
-    for (final textBlock in recognisedText.blocks) {
-      if (!regExp.hasMatch(textBlock.text)) {
-        continue;
+      for (final textBlock in recognisedText.blocks) {
+        // Clean the text by removing spaces and special characters for IBAN validation
+        String cleanText = textBlock.text.replaceAll(RegExp(r'[\s\-]'), '');
+        
+        // Check if it looks like an IBAN (starts with 2 letters followed by 2 digits)
+        if (RegExp(r'^[A-Z]{2}[0-9]{2}[A-Z0-9]+$', caseSensitive: false).hasMatch(cleanText)) {
+          if (isValid(cleanText)) {
+            iban = toPrintFormat(cleanText);
+            ibanFound = true;
+            break;
+          }
+        }
+        
+        // Also try the original regex approach as fallback
+        if (!ibanFound && regExp.hasMatch(textBlock.text)) {
+          var possibleIBAN = regExp.firstMatch(textBlock.text)?.group(2);
+          if (possibleIBAN != null && isValid(possibleIBAN)) {
+            iban = toPrintFormat(possibleIBAN);
+            ibanFound = true;
+            break;
+          }
+        }
       }
-      var possibleIBAN = regExp.firstMatch(textBlock.text)!.group(2).toString();
-      if (!isValid(possibleIBAN)) {
-        continue;
+
+      if (ibanFound) {
+        widget.onScannerResult(iban);
       }
-
-      iban = toPrintFormat(possibleIBAN);
-      ibanFound = true;
-      break;
-    }
-
-    if (ibanFound) {
-      widget.onScannerResult(iban);
+    } catch (e) {
+      print('Error processing image: $e');
     }
 
     isBusy = false;
@@ -251,6 +272,8 @@ class _IBANScannerViewState extends State<IBANScannerView> {
   }
 
   Future _startLiveFeed() async {
+    if (cameras.isEmpty) return;
+    
     final camera = cameras[_cameraIndex];
     _controller = CameraController(
       camera,
@@ -258,13 +281,19 @@ class _IBANScannerViewState extends State<IBANScannerView> {
       imageFormatGroup: ImageFormatGroup.yuv420,
       enableAudio: false,
     );
-    _controller?.initialize().then((_) {
+    
+    try {
+      await _controller?.initialize();
       if (!mounted) {
         return;
       }
-      _controller?.startImageStream(_processCameraImage);
-      setState(() {});
-    });
+      await _controller?.startImageStream(_processCameraImage);
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print('Error starting camera: $e');
+    }
   }
 
   Future _stopLiveFeed() async {
@@ -274,67 +303,62 @@ class _IBANScannerViewState extends State<IBANScannerView> {
   }
 
   Future _switchLiveCamera() async {
-    if (_cameraIndex == 0)
+    if (cameras.isEmpty) return;
+    
+    if (_cameraIndex == 0) {
       _cameraIndex = 1;
-    else
+    } else {
       _cameraIndex = 0;
+    }
+    
+    // Ensure we don't go out of bounds
+    if (_cameraIndex >= cameras.length) {
+      _cameraIndex = 0;
+    }
+    
     await _stopLiveFeed();
     await _startLiveFeed();
   }
 
   Future _processCameraImage(CameraImage image) async {
-    final WriteBuffer allBytes = WriteBuffer();
-    for (Plane plane in image.planes) {
-      allBytes.putUint8List(plane.bytes);
-    }
-    final bytes = allBytes.done().buffer.asUint8List();
-
-    final Size imageSize =
-        Size(image.width.toDouble(), image.height.toDouble());
-
-    final camera = cameras[_cameraIndex];
-    final imageRotation = InputImageRotation.values.firstWhere(
-  (element) => element.rawValue == camera.sensorOrientation,
-  orElse: () => InputImageRotation.rotation0deg,
-);
-
-
-    final inputImageFormat = InputImageFormat.values.firstWhere(
-  (element) => element.rawValue == image.format.raw,
-  orElse: () => InputImageFormat.yuv_420_888,
-);
-
-/*
-    final planeData = image.planes.map(
-      (Plane plane) {
-        return InputImagePlaneMetadata(
-          bytesPerRow: plane.bytesPerRow,
-          height: plane.height,
-          width: plane.width,
-        );
-      },
-    ).toList();
-*/
-    /*
-    final inputImageData = InputImageData(
-      size: imageSize,
-      imageRotation: imageRotation,
-      inputImageFormat: inputImageFormat,
-      planeData: planeData,
-    );
-*/
-final inputImageData = InputImageMetadata(
-  size: imageSize,
-  rotation: imageRotation,
-  format: inputImageFormat,
-  bytesPerRow: image.planes[0].bytesPerRow,
-);
+    if (isBusy) return;
     
+    try {
+      final WriteBuffer allBytes = WriteBuffer();
+      for (Plane plane in image.planes) {
+        allBytes.putUint8List(plane.bytes);
+      }
+      final bytes = allBytes.done().buffer.asUint8List();
 
-    final inputImage =
-        InputImage.fromBytes(bytes: bytes, metadata: inputImageData);
-    if (mounted) {
-      processImage(inputImage);
+      final Size imageSize =
+          Size(image.width.toDouble(), image.height.toDouble());
+
+      final camera = cameras[_cameraIndex];
+      final imageRotation = InputImageRotation.values.firstWhere(
+        (element) => element.rawValue == camera.sensorOrientation,
+        orElse: () => InputImageRotation.rotation0deg,
+      );
+
+      final inputImageFormat = InputImageFormat.values.firstWhere(
+        (element) => element.rawValue == image.format.raw,
+        orElse: () => InputImageFormat.yuv420,
+      );
+
+      final inputImageData = InputImageMetadata(
+        size: imageSize,
+        rotation: imageRotation,
+        format: inputImageFormat,
+        bytesPerRow: image.planes[0].bytesPerRow,
+      );
+
+      final inputImage =
+          InputImage.fromBytes(bytes: bytes, metadata: inputImageData);
+      
+      if (mounted) {
+        await processImage(inputImage);
+      }
+    } catch (e) {
+      print('Error processing camera image: $e');
     }
   }
 }
@@ -344,38 +368,57 @@ class Mask extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color _background = Colors.grey.withOpacity(0.7);
-
     return SafeArea(
-      child: Column(
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-         
-              Container(
-                height: MediaQuery.of(context).size.height,
-                width: MediaQuery.of(context).size.width,
-                child: Column(
-                  children: <Widget>[
-                    Expanded(
-                      child: Container(                      
-              
-
-                        
-                        color: Colors.transparent,                  
-                        
-              
-                        
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-           
-            ],
-          )
-        ],
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.5),
+        ),
+        child: CustomPaint(
+          painter: MaskPainter(),
+          child: Container(),
+        ),
       ),
     );
   }
+}
+
+class MaskPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black.withOpacity(0.7)
+      ..style = PaintingStyle.fill;
+
+    final transparentPaint = Paint()
+      ..color = Colors.transparent
+      ..blendMode = BlendMode.clear;
+
+    // Draw the overlay
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+
+    // Create a transparent rectangle in the center for scanning area
+    final scanAreaHeight = size.height * 0.3;
+    final scanAreaWidth = size.width * 0.8;
+    final left = (size.width - scanAreaWidth) / 2;
+    final top = (size.height - scanAreaHeight) / 2;
+
+    canvas.drawRect(
+      Rect.fromLTWH(left, top, scanAreaWidth, scanAreaHeight),
+      transparentPaint,
+    );
+
+    // Draw border around scanning area
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    canvas.drawRect(
+      Rect.fromLTWH(left, top, scanAreaWidth, scanAreaHeight),
+      borderPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
