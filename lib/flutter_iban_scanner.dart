@@ -226,35 +226,47 @@ void dispose() {
     multiLine: false,
   );
 
-  Future<void> processImage(InputImage inputImage) async {
-    if (isBusy) return;
-    isBusy = true;
+Future _processCameraImage(CameraImage image) async {
+  if (isBusy) return; // Prevent concurrent processing
+  isBusy = true;
 
-    final recognisedText = await textDetector.processImage(inputImage);
-	print('Recognized text: ${recognisedText.text}');
-    for (final textBlock in recognisedText.blocks) {
-      if (!regExp.hasMatch(textBlock.text)) {
-        continue;
-      }
-      var possibleIBAN = regExp.firstMatch(textBlock.text)!.group(2).toString();
-      if (!isValid(possibleIBAN)) {
-        continue;
-      }
-
-      iban = toPrintFormat(possibleIBAN);
-      ibanFound = true;
-      break;
+  try {
+    final WriteBuffer allBytes = WriteBuffer();
+    for (Plane plane in image.planes) {
+      allBytes.putUint8List(plane.bytes);
     }
+    final bytes = allBytes.done().buffer.asUint8List();
 
-    if (ibanFound) {
-      widget.onScannerResult(iban);
-    }
+    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
 
+    final camera = cameras[_cameraIndex];
+    final imageRotation = InputImageRotation.values.firstWhere(
+      (element) => element.rawValue == camera.sensorOrientation,
+      orElse: () => InputImageRotation.rotation0deg,
+    );
+
+    final inputImageFormat = InputImageFormat.yuv_420_888;
+
+    final inputImageData = InputImageMetadata(
+      size: imageSize,
+      rotation: imageRotation,
+      format: inputImageFormat,
+      bytesPerRow: image.planes[0].bytesPerRow,
+    );
+
+    final inputImage = InputImage.fromBytes(
+      bytes: bytes,
+      metadata: inputImageData,
+    );
+
+    await processImage(inputImage);
+  } catch (e) {
+    print('Camera image processing error: $e');
+  } finally {
     isBusy = false;
-    if (mounted) {
-      setState(() {});
-    }
   }
+}
+
 
   Future _startLiveFeed() async {
     final camera = cameras![_cameraIndex];
