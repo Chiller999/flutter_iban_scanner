@@ -357,21 +357,14 @@ class Mask extends StatelessWidget {
                 child: Column(
                   children: <Widget>[
                     Expanded(
-                      child: Container(
-                        color: _background,
-                      ),
-                    ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.transparent,
-                        border: Border.all(color: Colors.blueAccent),
-                      ),
-                      height: MediaQuery.of(context).size.width * 0.1,
-                      width: MediaQuery.of(context).size.width * 0.95,
-                    ),
-                    Expanded(
-                      child: Container(
-                        color: _background,
+                      child: Container(                      
+              
+
+                        
+                        color: Colors.transparent,                  
+                        
+              
+                        
                       ),
                     ),
                   ],
