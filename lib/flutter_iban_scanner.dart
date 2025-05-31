@@ -254,7 +254,7 @@ class _IBANScannerViewState extends State<IBANScannerView> {
     final camera = cameras[_cameraIndex];
     _controller = CameraController(
       camera,
-      ResolutionPreset.high,
+      ResolutionPreset.max,
       enableAudio: false,
     );
     _controller?.initialize().then((_) {
