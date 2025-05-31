@@ -350,16 +350,10 @@ class Mask extends StatelessWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
-              Expanded(
-                child: Container(
-                  height: MediaQuery.of(context).size.height - 25,
-                  width: 1,
-                  color: _background,
-                ),
-              ),
+         
               Container(
-                height: MediaQuery.of(context).size.height - 25,
-                width: MediaQuery.of(context).size.width * 0.95,
+                height: MediaQuery.of(context).size.height,
+                width: MediaQuery.of(context).size.width,
                 child: Column(
                   children: <Widget>[
                     Expanded(
@@ -383,13 +377,7 @@ class Mask extends StatelessWidget {
                   ],
                 ),
               ),
-              Expanded(
-                child: Container(
-                  height: MediaQuery.of(context).size.height - 25,
-                  width: 1,
-                  color: _background,
-                ),
-              ),
+           
             ],
           )
         ],
